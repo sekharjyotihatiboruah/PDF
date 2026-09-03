@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PDFix - browser-based PDF toolbox and PDF editor">
+  <title>PDFix — PDF Toolbox</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <h1>PDFix</h1>
+        <span>Simple PDF tools</span>
+      </div>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="Toggle theme">☾</button>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <span class="badge">100% browser based</span>
+      <h2>Your PDF toolbox</h2>
+      <p>Edit, preview and manage PDF files directly in your browser.</p>
+    </section>
+
+    <section class="tools-grid" aria-label="PDF tools">
+      <button class="tool-card active" data-tool="editor">
+        <span class="tool-icon">✎</span>
+        <strong>PDF Editor</strong>
+        <small>Add text, draw, highlight, shapes & images</small>
+      </button>
+      <button class="tool-card" data-tool="merge"><span class="tool-icon">＋</span><strong>Merge PDF</strong><small>Combine multiple PDF files</small></button>
+      <button class="tool-card" data-tool="split"><span class="tool-icon">✂</span><strong>Split PDF</strong><small>Extract selected pages</small></button>
+      <button class="tool-card" data-tool="rotate"><span class="tool-icon">↻</span><strong>Rotate PDF</strong><small>Rotate PDF pages</small></button>
+      <button class="tool-card" data-tool="delete"><span class="tool-icon">⌫</span><strong>Delete Pages</strong><small>Remove unwanted pages</small></button>
+      <button class="tool-card" data-tool="extract"><span class="tool-icon">▣</span><strong>Extract Pages</strong><small>Create a new PDF from pages</small></button>
+      <button class="tool-card" data-tool="info"><span class="tool-icon">ⓘ</span><strong>PDF Info</strong><small>View file and page information</small></button>
+      <button class="tool-card" data-tool="image"><span class="tool-icon">▧</span><strong>PDF → Image</strong><small>Export PDF pages as PNG</small></button>
+      <button class="tool-card" data-tool="imagepdf"><span class="tool-icon">▤</span><strong>Image → PDF</strong><small>Turn images into a PDF</small></button>
+    </section>
+
+    <section class="workspace" id="workspace">
+      <div class="workspace-head">
+        <div>
+          <h3 id="workspaceTitle">PDF Editor</h3>
+          <p id="workspaceHint">Upload a PDF to start editing.</p>
+        </div>
+        <button class="ghost hidden" id="backBtn">← Back</button>
+      </div>
+
+      <div id="landingTool" class="landing-tool">
+        <label class="dropzone" id="dropzone">
+          <input id="fileInput" type="file" accept="application/pdf">
+          <span class="upload-icon">↑</span>
+          <strong>Choose a PDF</strong>
+          <span>or drag & drop it here</span>
+          <small>Your file stays in your browser.</small>
+        </label>
+        <div id="toolControls" class="tool-controls hidden"></div>
+        <div id="toolMessage" class="tool-message"></div>
+      </div>
+
+      <div id="editorApp" class="editor-app hidden">
+        <div class="editor-toolbar">
+          <div class="toolbar-group">
+            <label>Page
+              <select id="pageSelect"></select>
+            </label>
+            <button class="toolbar-btn" data-action="prev">‹</button>
+            <button class="toolbar-btn" data-action="next">›</button>
+          </div>
+
+          <div class="toolbar-group">
+            <button class="toolbar-btn active" data-toolmode="select">Select</button>
+            <button class="toolbar-btn" data-toolmode="text">Text</button>
+            <button class="toolbar-btn" data-toolmode="draw">Draw</button>
+            <button class="toolbar-btn" data-toolmode="highlight">Highlight</button>
+            <button class="toolbar-btn" data-toolmode="rect">Rectangle</button>
+            <button class="toolbar-btn" data-toolmode="circle">Circle</button>
+            <button class="toolbar-btn" data-toolmode="image">Image</button>
+          </div>
+
+          <div class="toolbar-group">
+            <label>Color <input id="colorPicker" type="color" value="#2563eb"></label>
+            <label>Size <input id="sizePicker" type="range" min="1" max="12" value="3"></label>
+            <button class="toolbar-btn" data-action="undo">Undo</button>
+            <button class="toolbar-btn danger" data-action="clear">Clear page</button>
+            <button class="primary-btn" id="downloadBtn">Download PDF</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap" id="canvasWrap">
+          <div class="page-stage" id="pageStage">
+            <canvas id="pdfCanvas"></canvas>
+            <canvas id="drawCanvas"></canvas>
+          </div>
+        </div>
+
+        <input type="file" id="imageInput" accept="image/*" hidden>
+      </div>
+    </section>
+  </main>
+
+  <footer>PDFix • Files are processed locally in your browser</footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script type="module">
+    // Expose a promise so the main script never runs before PDF.js is ready.
+    window.pdfjsReady = import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs")
+      .then((pdfjsLib) => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.mjs";
+        window.pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+      })
+      .catch((err) => {
+        console.error("PDF.js failed to load:", err);
+        throw err;
+      });
+  </script>
+  <script src="script.js"></script>
+</body>
+</html>
