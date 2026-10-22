@@ -19,6 +19,46 @@
     node.style.color = error ? "var(--danger)" : "var(--muted)";
   }
 
+  async function buildImagePdf(inputBytes, quality, scale, progressPrefix = "Maximum compression") {
+    const source = await window.pdfjsLib.getDocument({ data: inputBytes.slice() }).promise;
+    const output = await PDFLib.PDFDocument.create();
+    const total = source.numPages;
+
+    try {
+      for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
+        setMessage(`${progressPrefix}: processing page ${pageNumber} of ${total}…`);
+        const sourcePage = await source.getPage(pageNumber);
+        const base = sourcePage.getViewport({ scale: 1 });
+        const viewport = sourcePage.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.ceil(viewport.width));
+        canvas.height = Math.max(1, Math.ceil(viewport.height));
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("Canvas is not available on this device.");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await sourcePage.render({ canvasContext: context, viewport, background: "#ffffff" }).promise;
+
+        const jpegBlob = await new Promise((resolve, reject) => {
+          canvas.toBlob(
+            blob => blob ? resolve(blob) : reject(new Error("Could not encode a PDF page.")),
+            "image/jpeg",
+            quality
+          );
+        });
+        const image = await output.embedJpg(new Uint8Array(await jpegBlob.arrayBuffer()));
+        const page = output.addPage([base.width, base.height]);
+        page.drawImage(image, { x: 0, y: 0, width: base.width, height: base.height });
+        canvas.width = 1;
+        canvas.height = 1;
+        sourcePage.cleanup();
+      }
+      return await output.save({ useObjectStreams: true });
+    } finally {
+      await source.destroy();
+    }
+  }
+
   async function compressPdf(file, mode, button) {
     if (!file) {
       setMessage("Choose a PDF file first.", true);
@@ -28,64 +68,57 @@
       setMessage("The PDF engines did not load. Check your internet connection and reload the page.", true);
       return;
     }
+
+    const targetKB = Number($("#targetSizeKB")?.value);
+    if (mode === "target" && (!Number.isFinite(targetKB) || targetKB < 10)) {
+      setMessage("Enter a target size of at least 10 KB.", true);
+      return;
+    }
+
     button.disabled = true;
     button.textContent = "Compressing…";
     try {
       const inputBytes = new Uint8Array(await file.arrayBuffer());
       let outputBytes;
+      let outputName = "pdfix-compressed-balanced.pdf";
 
       if (mode === "maximum") {
-        setMessage("Preparing pages for maximum compression. Large files may take a few minutes.");
-        const source = await window.pdfjsLib.getDocument({ data: inputBytes.slice() }).promise;
-        const output = await PDFLib.PDFDocument.create();
-        const total = source.numPages;
-
-        for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
-          setMessage(`Maximum compression: processing page ${pageNumber} of ${total}…`);
-          const sourcePage = await source.getPage(pageNumber);
-          const base = sourcePage.getViewport({ scale: 1 });
-          const viewport = sourcePage.getViewport({ scale: 1.05 });
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.ceil(viewport.width));
-          canvas.height = Math.max(1, Math.ceil(viewport.height));
-          const context = canvas.getContext("2d", { alpha: false });
-          context.fillStyle = "#ffffff";
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          await sourcePage.render({
-            canvasContext: context,
-            viewport,
-            background: "#ffffff"
-          }).promise;
-
-          const jpegBlob = await new Promise((resolve, reject) => {
-            canvas.toBlob(
-              blob => blob ? resolve(blob) : reject(new Error("Could not encode a PDF page.")),
-              "image/jpeg",
-              0.48
-            );
-          });
-          const image = await output.embedJpg(new Uint8Array(await jpegBlob.arrayBuffer()));
-          const page = output.addPage([base.width, base.height]);
-          page.drawImage(image, { x: 0, y: 0, width: base.width, height: base.height });
-          canvas.width = 1;
-          canvas.height = 1;
-          sourcePage.cleanup();
+        outputBytes = await buildImagePdf(inputBytes, 0.48, 1.05);
+        outputName = "pdfix-compressed-maximum.pdf";
+      } else if (mode === "target") {
+        const targetBytes = Math.floor(targetKB * 1024);
+        // Try progressively smaller rasterized versions. The target is a goal, not a guarantee.
+        const candidates = [
+          { quality: 0.62, scale: 1.1 },
+          { quality: 0.48, scale: 1.0 },
+          { quality: 0.36, scale: 0.85 },
+          { quality: 0.27, scale: 0.72 },
+          { quality: 0.19, scale: 0.6 },
+          { quality: 0.12, scale: 0.5 }
+        ];
+        let smallest = null;
+        for (let i = 0; i < candidates.length; i++) {
+          const candidate = candidates[i];
+          setMessage(`Target size ${targetKB} KB: trying compression level ${i + 1} of ${candidates.length}…`);
+          const attempt = await buildImagePdf(inputBytes, candidate.quality, candidate.scale, "Target-size compression");
+          if (!smallest || attempt.length < smallest.length) smallest = attempt;
+          if (attempt.length <= targetBytes) {
+            outputBytes = attempt;
+            break;
+          }
         }
-        await source.destroy();
-        outputBytes = await output.save({ useObjectStreams: true });
+        if (!outputBytes) outputBytes = smallest;
+        outputName = `pdfix-target-${targetKB}kb.pdf`;
       } else {
         setMessage("Optimizing the PDF structure while preserving selectable text…");
         const doc = await PDFLib.PDFDocument.load(inputBytes);
         outputBytes = await doc.save({ useObjectStreams: true });
       }
 
-      const blob = new Blob([outputBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(new Blob([outputBytes], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = mode === "maximum"
-        ? "pdfix-compressed-maximum.pdf"
-        : "pdfix-compressed-balanced.pdf";
+      link.download = outputName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -98,7 +131,12 @@
         ? `${(n / (1024 * 1024)).toFixed(2)} MB`
         : `${(n / 1024).toFixed(1)} KB`;
       const result = change >= 0 ? `${change}% smaller` : `${Math.abs(change)}% larger`;
-      setMessage(`Finished: ${sizeLabel(originalSize)} → ${sizeLabel(finalSize)} (${result}).`);
+      const targetNote = mode === "target"
+        ? (finalSize <= targetKB * 1024
+            ? ` Target achieved (goal: ${targetKB} KB).`
+            : ` Could not reach ${targetKB} KB; this is the smallest version found in the available attempts.`)
+        : "";
+      setMessage(`Finished: ${sizeLabel(originalSize)} → ${sizeLabel(finalSize)} (${result}).${targetNote}`);
     } catch (error) {
       console.error("PDFix compression failed:", error);
       setMessage("Compression failed. The PDF may be encrypted, damaged, or too large for this device.", true);
@@ -146,18 +184,33 @@
         <label for="compressorFile">PDF file</label>
         <input id="compressorFile" type="file" accept=".pdf,application/pdf">
         <div class="compress-row">
-          <label for="compressorMode">Compression level</label>
+          <label for="compressorMode">Compression option</label>
           <select id="compressorMode">
             <option value="balanced">Balanced — preserve selectable text</option>
-            <option value="maximum">Maximum — smaller, image-based pages</option>
+            <option value="maximum">Maximum — image-based pages</option>
+            <option value="target">Target file size — choose KB</option>
           </select>
+          <label for="targetSizeKB">Target (KB)</label>
+          <input id="targetSizeKB" type="number" min="10" step="10" value="150" inputmode="numeric" aria-label="Target PDF size in kilobytes">
           <button class="primary-btn" id="compressorStart">Compress & Download</button>
         </div>
         <p class="compression-note"><strong>Balanced:</strong> rewrites the PDF using object streams where supported. It preserves page content and selectable text, but the size reduction may be modest, especially for PDFs already optimized.</p>
         <p class="compression-note"><strong>Maximum:</strong> renders each page as a compressed JPEG image. This can reduce scanned or photo-heavy PDFs more, but text will no longer be selectable/searchable, and links, forms, accessibility tags, or other interactive features may not be preserved.</p>
+        <p class="compression-note"><strong>Target file size:</strong> enter a goal such as 150 KB for a 300 KB PDF. It tries progressively stronger image compression and reports if the target cannot be reached. Target-size mode also converts pages to images.</p>
         <div id="compressorMessage" role="status" aria-live="polite">Choose a PDF to begin. Files are processed locally in your browser.</div>
       `;
       landing.appendChild(panel);
+
+      const modeSelect = $("#compressorMode");
+      const targetInput = $("#targetSizeKB");
+      const updateTargetVisibility = () => {
+        const targetLabel = targetInput?.previousElementSibling;
+        const show = modeSelect.value === "target";
+        if (targetInput) targetInput.style.display = show ? "inline-block" : "none";
+        if (targetLabel) targetLabel.style.display = show ? "inline-flex" : "none";
+      };
+      modeSelect.addEventListener("change", updateTargetVisibility);
+      updateTargetVisibility();
 
       $("#compressorStart").addEventListener("click", () => {
         const file = $("#compressorFile").files[0];
