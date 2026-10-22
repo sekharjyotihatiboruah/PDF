@@ -19,3 +19,11 @@ button{cursor:pointer}
 
 .tool-controls{margin:18px auto 0;max-width:760px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
 .tool-controls h4{margin:0 0 12px}.control-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}.control-row label{color:var(--text)}.page-input{flex:1;min-width:180px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
+.compression-note{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}
+#compressorPanel{margin:18px auto 0;max-width:760px;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+#compressorPanel h4{margin:0 0 12px}
+#compressorPanel .compression-note{font-size:12px;line-height:1.6;color:var(--muted)}
+#compressorPanel .compress-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+#compressorPanel select{flex:1;min-width:220px;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
+#compressorPanel button:disabled{opacity:.65;cursor:wait}
+#compressorMessage{padding:10px 0;color:var(--muted);font-size:13px}
