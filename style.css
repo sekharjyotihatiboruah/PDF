@@ -27,3 +27,5 @@ button{cursor:pointer}
 #compressorPanel select{flex:1;min-width:220px;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
 #compressorPanel button:disabled{opacity:.65;cursor:wait}
 #compressorMessage{padding:10px 0;color:var(--muted);font-size:13px}
+
+#compressorPanel input[type="number"]{width:110px;min-width:90px;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
